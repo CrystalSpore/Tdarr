@@ -10,33 +10,36 @@ ENV \
 ENV WEB_UI_PORT="8265" SERVER_PORT="8266" NODE_PORT="8267" PUID="1000" PGID="1000" UMASK="002" TZ="Etc/UTC" HOME="/home/Tdarr"
 
 # handle deps
-RUN apt-get update &&  \
-        apt-get install -y \
+RUN apt-get update
+RUN apt-get install -y \
             software-properties-common \
+	    jq \
+	    wget \
             git \
-            trash-cli && \
-    mkdir -p \
+            trash-cli
+
+RUN mkdir -p \
     /app \
     /logs \
     /temp \
-    "${HOME}" && \
-    # useradd -u ${PUID} -U -d ${HOME} -s /bin/false Tdarr && \
-    # usermod -G users Tdarr && \
+    "${HOME}"
+# RUN useradd -u ${PUID} -U -d ${HOME} -s /bin/false Tdarr && \
+    # usermod -G users Tdarr
 
-    apt-get update && \
+RUN apt-get update && \
     apt-get install -y curl unzip wget comskip \
         # for apprise
         python3-pip && \
-        pip3 install apprise && \
+        pip3 install apprise
 
     # MkvToolNIX
-    wget -O /usr/share/keyrings/gpg-pub-moritzbunkus.gpg https://mkvtoolnix.download/gpg-pub-moritzbunkus.gpg && \
+RUN wget -O /usr/share/keyrings/gpg-pub-moritzbunkus.gpg https://mkvtoolnix.download/gpg-pub-moritzbunkus.gpg && \
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/gpg-pub-moritzbunkus.gpg] https://mkvtoolnix.download/ubuntu/ jammy main" | tee /etc/apt/sources.list.d/mkvtoolnix.download.list && \
     echo "deb-src [arch=amd64 signed-by=/usr/share/keyrings/gpg-pub-moritzbunkus.gpg] https://mkvtoolnix.download/ubuntu/ jammy main" | tee -a /etc/apt/sources.list.d/mkvtoolnix.download.list && \
-    apt-get update && apt-get install -y mkvtoolnix && \
+    apt-get update && apt-get install -y mkvtoolnix
 
     #cc-extractor
-    apt-get install -y \
+RUN apt-get install -y \
         libglew-dev \
         libglfw3-dev \
         cmake \
@@ -53,17 +56,15 @@ RUN apt-get update &&  \
         git checkout 35e73c1c90ce3ca69394d3523836bb1cdec28f11 && \
         ./build -without-rust && \
         mv ./ccextractor /usr/bin/ccextractor && \
-        
-        cd / && rm -rf /ccextractor && \
-    if uname -m | grep -q x86; then \
+        cd / && rm -rf /ccextractor
 
+RUN if uname -m | grep -q x86; then \
 # Setup Intel Package Repository
         curl -sSL https://repositories.intel.com/gpu/intel-graphics.key | \
             gpg --dearmor --output /usr/share/keyrings/intel-graphics.gpg && \
         echo "deb [arch=amd64,i386 signed-by=/usr/share/keyrings/intel-graphics.gpg] https://repositories.intel.com/gpu/ubuntu jammy client" | \
             tee /etc/apt/sources.list.d/intel-gpu-jammy.list && \
         apt-get update && \
-
         apt install -y \
             intel-opencl-icd \
             intel-level-zero-gpu \
@@ -90,13 +91,12 @@ RUN apt-get update &&  \
             vainfo \
             hwinfo \
             clinfo && \
-
-        # FFmpeg 6
-        ffmpegversion=$(curl --silent https://api.github.com/repos/jellyfin/jellyfin-ffmpeg/releases/latest | grep -oP '"tag_name":\s*"v\K[^"]+' | sort -h | tail -n1) && \
-        wget https://github.com/jellyfin/jellyfin-ffmpeg/releases/download/v$ffmpegversion/jellyfin-ffmpeg6_$ffmpegversion-jammy_amd64.deb && \
+        # FFmpeg 7
+        ffmpegversion=$(curl --silent https://api.github.com/repos/jellyfin/jellyfin-ffmpeg/releases/latest | jq -r '.tag_name' | cut -d'v' -f2) && \
+        wget https://github.com/jellyfin/jellyfin-ffmpeg/releases/download/v$ffmpegversion/jellyfin-ffmpeg7_$ffmpegversion-jammy_amd64.deb && \
         apt install -y \
-        ./jellyfin-ffmpeg6_$ffmpegversion-jammy_amd64.deb && \
-        rm -rf ./jellyfin-ffmpeg6_$ffmpegversion-jammy_amd64.deb && \
+        ./jellyfin-ffmpeg7_$ffmpegversion-jammy_amd64.deb && \
+        rm -rf ./jellyfin-ffmpeg7_$ffmpegversion-jammy_amd64.deb && \
         ln -s /usr/lib/jellyfin-ffmpeg/ffmpeg /usr/local/bin/ffmpeg && \
         ln -s /usr/lib/jellyfin-ffmpeg/ffmpeg /usr/local/bin/tdarr-ffmpeg && \
         # apt-get install -y ffmpeg && \
@@ -143,7 +143,6 @@ RUN apt-get update &&  \
             # QSV dependencies
             libva-dev \
             libdrm-dev && \
-
         rm -rdf /tmp/handbrake && \
         mkdir -p /tmp/handbrake && \
         git clone \
@@ -152,6 +151,7 @@ RUN apt-get update &&  \
             /tmp/handbrake && \
         cd /tmp/handbrake && \
         ./configure \
+	    --enable-nvdec \
             --enable-nvenc \
             --enable-qsv \
             --enable-x265 \
@@ -162,17 +162,19 @@ RUN apt-get update &&  \
         make --directory=build install && \
         cp /tmp/handbrake/build/HandBrakeCLI /usr/local/bin/HandBrakeCLI && \
         rm -rdf /tmp/handbrake/ ; \
-    fi && \
-    if uname -m | grep -q aarch64; then \
-        apt-get install -y handbrake-cli ffmpeg && \
-        ln -s /usr/bin/ffmpeg /usr/local/bin/tdarr-ffmpeg ; \
-    fi && \
-    if uname -m | grep -q armv7l; then \
-        apt-get install -y handbrake-cli ffmpeg && \
-        ln -s /usr/bin/ffmpeg /usr/local/bin/tdarr-ffmpeg ; \
-    fi && \
+    fi
 
-    trash-empty && \
+RUN if uname -m | grep -q aarch64; then \
+        apt-get install -y handbrake-cli ffmpeg && \
+        ln -s /usr/bin/ffmpeg /usr/local/bin/tdarr-ffmpeg ; \
+    fi
+
+RUN if uname -m | grep -q armv7l; then \
+        apt-get install -y handbrake-cli ffmpeg && \
+        ln -s /usr/bin/ffmpeg /usr/local/bin/tdarr-ffmpeg ; \
+    fi
+
+RUN trash-empty && \
         if uname -m | grep -q x86; then \
             apt-get clean && \
             apt purge -y \
